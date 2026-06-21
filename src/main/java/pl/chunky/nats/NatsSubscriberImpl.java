@@ -40,7 +40,7 @@ public class NatsSubscriberImpl implements NatsSubscriber {
         try {
           method.invoke(target, decoded, msg);
         } catch (final Exception e) {
-          e.printStackTrace();
+          throw new NatsException(e);
         }
       });
     });

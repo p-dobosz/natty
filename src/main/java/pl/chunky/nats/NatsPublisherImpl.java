@@ -30,7 +30,7 @@ public class NatsPublisherImpl implements NatsPublisher {
       }
       return codec.decode(response.getData(), responseType);
     } catch (final Exception e) {
-      throw new RuntimeException(e);
+      throw new NatsException(e);
     }
   }
 
@@ -42,7 +42,7 @@ public class NatsPublisherImpl implements NatsPublisher {
         connection.publish(replyTo, codec.encode(response));
       }
     } catch (final Exception e) {
-      e.printStackTrace();
+      throw new NatsException(e);
     }
   }
 }
