@@ -1,5 +1,5 @@
 # chunky-nats
 
 * [x] ~~**KV**~~
-* [ ] **pubsub** (TODO)
+* [x] ~~**pubsub**~~ 
 * [ ] **JetStream** (TODO)
