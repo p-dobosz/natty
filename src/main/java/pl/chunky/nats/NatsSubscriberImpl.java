@@ -17,7 +17,8 @@ public class NatsSubscriberImpl implements NatsSubscriber {
   final Codec codec = new FuryCodec();
   final Connection connection;
   final List<Dispatcher> dispatchers = new ArrayList<>();
-  final ExecutorService executor = Executors.newFixedThreadPool(4, r -> new Thread(r, "nats-subscriber"));
+  final ExecutorService executor = Executors.newFixedThreadPool(4,
+      r -> new Thread(r, "nats-subscriber"));
 
   public NatsSubscriberImpl(final Connection connection) {
     this.connection = connection;
@@ -31,7 +32,8 @@ public class NatsSubscriberImpl implements NatsSubscriber {
   }
 
   @Override
-  public <T> void subscribe(final String topic, final Class<T> type, final Object target, final Method method, final Executor executor) {
+  public <T> void subscribe(final String topic, final Class<T> type, final Object target,
+      final Method method, final Executor executor) {
     final Dispatcher dispatcher = connection.createDispatcher(msg -> {
       final T decoded = codec.decode(msg.getData(), type);
       executor.execute(() -> {
@@ -53,8 +55,7 @@ public class NatsSubscriberImpl implements NatsSubscriber {
         .filter(m -> m.isAnnotationPresent(NatsSubscribe.class))
         .forEach(method -> {
           final NatsSubscribe ann = method.getAnnotation(NatsSubscribe.class);
-          @SuppressWarnings("unchecked")
-          final Class<Object> packetType = (Class<Object>) ann.packet();
+          @SuppressWarnings("unchecked") final Class<Object> packetType = (Class<Object>) ann.packet();
           subscribe(ann.value(), packetType, subscriber, method, this.executor);
         });
   }

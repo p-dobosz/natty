@@ -21,7 +21,8 @@ public class NatsPublisherImpl implements NatsPublisher {
   }
 
   @Override
-  public <T, J> J request(final String topic, final T message, final Class<J> responseType, final Duration timeout) {
+  public <T, J> J request(final String topic, final T message, final Class<J> responseType,
+      final Duration timeout) {
     try {
       final Message response = connection.request(topic, codec.encode(message), timeout);
       if (response == null) {
