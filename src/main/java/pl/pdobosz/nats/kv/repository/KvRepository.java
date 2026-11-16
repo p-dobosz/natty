@@ -1,8 +1,8 @@
-package pl.chunky.nats.kv.repository;
+package pl.pdobosz.nats.kv.repository;
 
 import java.util.Optional;
-import pl.chunky.nats.NatsException;
-import pl.chunky.nats.kv.KvStore;
+import pl.pdobosz.nats.NatsException;
+import pl.pdobosz.nats.kv.KvStore;
 
 public abstract class KvRepository<T> {
 

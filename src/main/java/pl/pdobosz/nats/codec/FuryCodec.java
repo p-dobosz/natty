@@ -1,4 +1,4 @@
-package pl.chunky.nats.codec;
+package pl.pdobosz.nats.codec;
 
 import org.apache.fury.Fury;
 import org.apache.fury.ThreadSafeFury;
@@ -23,6 +23,11 @@ public class FuryCodec implements Codec {
   @Override
   @SuppressWarnings("unchecked")
   public <T> T decode(final byte[] bytes, final Class<T> type) {
-    return (T) fury.deserialize(bytes);
+    final Object decoded = fury.deserialize(bytes);
+    if (decoded != null && !type.isInstance(decoded)) {
+      throw new IllegalArgumentException(
+          "Decoded object of type " + decoded.getClass().getName() + " is not " + type.getName());
+    }
+    return (T) decoded;
   }
 }

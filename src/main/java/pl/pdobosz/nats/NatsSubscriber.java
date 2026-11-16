@@ -1,4 +1,4 @@
-package pl.chunky.nats;
+package pl.pdobosz.nats;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.Executor;

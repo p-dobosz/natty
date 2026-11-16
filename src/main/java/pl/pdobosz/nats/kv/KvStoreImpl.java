@@ -1,22 +1,27 @@
-package pl.chunky.nats.kv;
+package pl.pdobosz.nats.kv;
 
 import io.nats.client.KeyValue;
 import io.nats.client.api.KeyValueConfiguration;
 import io.nats.client.api.KeyValueEntry;
+import io.nats.client.api.KeyValueOperation;
 import io.nats.client.api.KeyValueWatcher;
 import io.nats.client.api.StorageType;
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import pl.chunky.nats.NatsClient;
-import pl.chunky.nats.NatsException;
-import pl.chunky.nats.codec.Codec;
+import pl.pdobosz.nats.NatsClient;
+import pl.pdobosz.nats.NatsException;
+import pl.pdobosz.nats.codec.Codec;
 
 public class KvStoreImpl implements KvStore {
 
   final NatsClient natsClient;
   final Codec codec;
   final ExecutorService executorService;
+  final Map<String, KeyValue> buckets = new ConcurrentHashMap<>();
 
   public KvStoreImpl(final NatsClient natsClient, final Codec codec,
       final ExecutorService executorService) {
@@ -28,11 +33,14 @@ public class KvStoreImpl implements KvStore {
   @Override
   public void init(final String bucket) throws NatsException {
     try {
-      final KeyValueConfiguration config = KeyValueConfiguration.builder()
-          .name(bucket)
-          .storageType(StorageType.Memory)
-          .build();
-      natsClient.connection().keyValueManagement().create(config);
+      final var management = natsClient.connection().keyValueManagement();
+      if (!management.getBucketNames().contains(bucket)) {
+        final KeyValueConfiguration config = KeyValueConfiguration.builder()
+            .name(bucket)
+            .storageType(StorageType.Memory)
+            .build();
+        management.create(config);
+      }
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -41,8 +49,7 @@ public class KvStoreImpl implements KvStore {
   @Override
   public <T> long put(final String bucket, final String key, final T value) throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      return kv.put(key, codec.encode(value));
+      return keyValue(bucket).put(key, codec.encode(value));
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -52,8 +59,7 @@ public class KvStoreImpl implements KvStore {
   public <T> long create(final String bucket, final String key, final T value)
       throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      return kv.create(key, codec.encode(value));
+      return keyValue(bucket).create(key, codec.encode(value));
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -63,8 +69,7 @@ public class KvStoreImpl implements KvStore {
   public <T> long update(final String bucket, final String key, final T value,
       final long expectedRevision) throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      return kv.update(key, codec.encode(value), expectedRevision);
+      return keyValue(bucket).update(key, codec.encode(value), expectedRevision);
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -74,8 +79,7 @@ public class KvStoreImpl implements KvStore {
   public <T> Optional<T> get(final String bucket, final String key, final Class<T> type)
       throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      final KeyValueEntry entry = kv.get(key);
+      final KeyValueEntry entry = keyValue(bucket).get(key);
       if (entry == null || entry.getValue() == null) {
         return Optional.empty();
       }
@@ -88,8 +92,7 @@ public class KvStoreImpl implements KvStore {
   @Override
   public void delete(final String bucket, final String key) throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      kv.delete(key);
+      keyValue(bucket).delete(key);
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -98,8 +101,7 @@ public class KvStoreImpl implements KvStore {
   @Override
   public void purge(final String bucket, final String key) throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      kv.purge(key);
+      keyValue(bucket).purge(key);
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -108,8 +110,7 @@ public class KvStoreImpl implements KvStore {
   @Override
   public List<String> keys(final String bucket) throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      return kv.keys();
+      return keyValue(bucket).keys();
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -119,28 +120,7 @@ public class KvStoreImpl implements KvStore {
   public <T> void watch(final String bucket, final String key, final Class<T> type,
       final KvWatcher<T> watcher) throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      kv.watch(key, new KeyValueWatcher() {
-        @Override
-        public void watch(final KeyValueEntry entry) {
-          executorService.execute(() -> {
-            final KvEventType kvEventType = switch (entry.getOperation()) {
-              case PUT -> KvEventType.UPSERT;
-              case DELETE -> KvEventType.DELETE;
-              case PURGE -> KvEventType.PURGE;
-            };
-
-            final T decoded =
-                (entry.getValue() != null && entry.getValue().length > 0) ? codec.decode(
-                    entry.getValue(), type) : null;
-            watcher.onUpdate(entry.getKey(), decoded, kvEventType);
-          });
-        }
-
-        @Override
-        public void endOfData() {
-        }
-      });
+      keyValue(bucket).watch(key, keyValueWatcher(type, watcher));
     } catch (final Exception e) {
       throw new NatsException(e);
     }
@@ -150,30 +130,45 @@ public class KvStoreImpl implements KvStore {
   public <T> void watchAll(final String bucket, final Class<T> type, final KvWatcher<T> watcher)
       throws NatsException {
     try {
-      final KeyValue kv = natsClient.connection().keyValue(bucket);
-      kv.watchAll(new KeyValueWatcher() {
-        @Override
-        public void watch(final KeyValueEntry entry) {
-          executorService.execute(() -> {
-            final KvEventType kvType = switch (entry.getOperation()) {
-              case PUT -> KvEventType.UPSERT;
-              case DELETE -> KvEventType.DELETE;
-              case PURGE -> KvEventType.PURGE;
-            };
-
-            final T decoded =
-                (entry.getValue() != null && entry.getValue().length > 0) ? codec.decode(
-                    entry.getValue(), type) : null;
-            watcher.onUpdate(entry.getKey(), decoded, kvType);
-          });
-        }
-
-        @Override
-        public void endOfData() {
-        }
-      });
+      keyValue(bucket).watchAll(keyValueWatcher(type, watcher));
     } catch (final Exception e) {
       throw new NatsException(e);
     }
+  }
+
+  private KeyValue keyValue(final String bucket) throws IOException {
+    final KeyValue cached = buckets.get(bucket);
+    if (cached != null) {
+      return cached;
+    }
+    final KeyValue keyValue = natsClient.connection().keyValue(bucket);
+    buckets.put(bucket, keyValue);
+    return keyValue;
+  }
+
+  private <T> KeyValueWatcher keyValueWatcher(final Class<T> type, final KvWatcher<T> watcher) {
+    return new KeyValueWatcher() {
+      @Override
+      public void watch(final KeyValueEntry entry) {
+        executorService.execute(() -> {
+          final T decoded = entry.getValue() == null || entry.getValue().length == 0
+              ? null
+              : codec.decode(entry.getValue(), type);
+          watcher.onUpdate(entry.getKey(), decoded, toEventType(entry.getOperation()));
+        });
+      }
+
+      @Override
+      public void endOfData() {
+      }
+    };
+  }
+
+  static KvEventType toEventType(final KeyValueOperation operation) {
+    return switch (operation) {
+      case PUT -> KvEventType.UPSERT;
+      case DELETE -> KvEventType.DELETE;
+      case PURGE -> KvEventType.PURGE;
+    };
   }
 }

@@ -1,8 +1,8 @@
-package pl.chunky.nats.kv;
+package pl.pdobosz.nats.kv;
 
 import java.util.List;
 import java.util.Optional;
-import pl.chunky.nats.NatsException;
+import pl.pdobosz.nats.NatsException;
 
 public interface KvStore {
 

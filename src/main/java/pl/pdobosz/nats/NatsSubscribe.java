@@ -1,4 +1,4 @@
-package pl.chunky.nats;
+package pl.pdobosz.nats;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

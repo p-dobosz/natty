@@ -1,4 +1,4 @@
-package pl.chunky.nats.codec;
+package pl.pdobosz.nats.codec;
 
 public interface Codec {
 

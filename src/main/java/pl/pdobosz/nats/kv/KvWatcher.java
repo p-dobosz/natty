@@ -1,4 +1,4 @@
-package pl.chunky.nats.kv;
+package pl.pdobosz.nats.kv;
 
 @FunctionalInterface
 public interface KvWatcher<T> {

@@ -1,4 +1,4 @@
-package pl.chunky.nats;
+package pl.pdobosz.nats;
 
 public class NatsException extends RuntimeException {
 
